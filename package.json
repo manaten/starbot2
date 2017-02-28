@@ -1,0 +1,20 @@
+{
+  "name": "starbot2",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:manaten/starbot2.git",
+  "author": "manaten <manaten@manaten.net> (http://manaten.net)",
+  "license": "MIT",
+  "dependencies": {
+    "@slack/client": "^3.8.1",
+    "cron": "^1.2.1",
+    "es6-promisify": "^5.0.0",
+    "forever": "^0.15.3"
+  },
+  "engines": {
+    "node": "7.6.0"
+  },
+  "scripts": {
+    "start": "forever index.js"
+  }
+}
