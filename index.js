@@ -2,7 +2,8 @@ const {WebClient} = require('@slack/client');
 const {CronJob} = require('cron');
 const promisify = require('es6-promisify');
 
-const webClient = new WebClient(process.env.SLACK_TOKEN || '');
+const searchClient = new WebClient(process.env.SLACK_TOKEN || '');
+const postClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN || '');
 
 const sentMessages = [];
 const EXPIRE_MSEC = 60 * 60 * 1000;
@@ -15,7 +16,7 @@ const run = async (isDry) => {
       }
     }
 
-    const result = await promisify(webClient.search.all, webClient.search)('has:reaction', {count: 30});
+    const result = await promisify(searchClient.search.all, searchClient.search)('has:reaction', {count: 30});
     if (!result.ok) {
       return;
     }
@@ -30,7 +31,7 @@ const run = async (isDry) => {
       const text = `<${message.permalink}|${shortPermalink}> が reaction されたよ`;
 
       if (!sentMessages[text] && !isDry) {
-        await promisify(webClient.chat.postMessage, webClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
+        await promisify(postClient.chat.postMessage, postClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
           as_user     : false,
           icon_emoji  : ':star:',
           unfurl_links: true,
