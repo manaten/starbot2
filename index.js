@@ -5,46 +5,71 @@ const promisify = require('es6-promisify');
 const searchClient = new WebClient(process.env.SLACK_TOKEN || '');
 const postClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN || '');
 
-const sentMessages = {};
+const getUserName = async userId => {
+  if (!userId) {
+    return null;
+  }
+  const result = await promisify(postClient.users.info, postClient.users)(userId);
+  if  (!result.ok) {
+    return null;
+  }
+  return result.user.name.replace(/^(.)/, '$1_');
+};
+
+const getReaction = async (channel, timestamp) => {
+  const result = await promisify(postClient.reactions.get, postClient.reactions)({channel, timestamp});
+  if (!result.ok || !result.message.reactions[0]) {
+    return null;
+  }
+  return result.message.reactions[0];
+};
+
+const processMessage = async message => {
+  try {
+    // 公開チャンネル以外は処理しない
+    if (!/^C/.test(message.channel.id)) {
+      return;
+    }
+    const reaction = await getReaction(message.channel.id, message.ts);
+    if (!reaction) {
+      return;
+    }
+    const userName = (await getUserName(reaction.users[0])) || '誰か';
+    const shortPermalink = message.permalink.replace(/^.+\/([^/]+\/[^/]+)$/, '$1');
+
+    const text = `:${userName}: が <${message.permalink}|${shortPermalink}> を :${reaction.name}:`;
+    await promisify(postClient.chat.postMessage, postClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
+      as_user     : false,
+      icon_emoji  : ':star:',
+      unfurl_links: true,
+      username    : 'starbot2'
+    });
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+
 const EXPIRE_MSEC = 60 * 60 * 1000;
+const sentMessages = {};
 const run = async (isDry) => {
   try {
     // sentMessages からexpiredを取り除く
-    for (const shortPermalink in sentMessages) {
-      if (sentMessages[shortPermalink] < Date.now()) {
-        delete sentMessages[shortPermalink];
+    for (const permalink in sentMessages) {
+      if (sentMessages[permalink] < Date.now()) {
+        delete sentMessages[permalink];
       }
     }
-
     const result = await promisify(searchClient.search.messages, searchClient.search)('has:reaction', {count: 30});
     if (!result.ok) {
       return;
     }
-
     for (const message of result.messages.matches) {
-      // 公開チャンネル以外は処理しない
-      if (!/^C/.test(message.channel.id)) {
-        continue;
+      if (!sentMessages[message.permalink] && !isDry) {
+        await processMessage(message);
       }
-
-      const shortPermalink = message.permalink.replace(/^.+\/([^/]+\/[^/]+)$/, '$1');
-
-      if (!sentMessages[shortPermalink] && !isDry) {
-        const reactions = await promisify(postClient.reactions.get, postClient.reactions)({
-          channel  : message.channel.id,
-          timestamp: message.ts
-        });
-        const text = `誰かが <${message.permalink}|${shortPermalink}> を` + reactions.message.reactions.map(r => `:${r.name}:`).join(' ');
-        await promisify(postClient.chat.postMessage, postClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
-          as_user     : false,
-          icon_emoji  : ':star:',
-          unfurl_links: true,
-          username    : 'starbot2'
-        });
-      }
-      sentMessages[shortPermalink] = Date.now() + EXPIRE_MSEC;
+      sentMessages[message.permalink] = Date.now() + EXPIRE_MSEC;
     }
-
     console.log(`There are ${Object.keys(sentMessages).length} message caches.`);
   } catch (e) {
     console.error(e);
