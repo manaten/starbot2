@@ -5,18 +5,18 @@ const promisify = require('es6-promisify');
 const searchClient = new WebClient(process.env.SLACK_TOKEN || '');
 const postClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN || '');
 
-const sentMessages = [];
+const sentMessages = {};
 const EXPIRE_MSEC = 60 * 60 * 1000;
 const run = async (isDry) => {
   try {
     // sentMessages からexpiredを取り除く
-    for (const text in sentMessages) {
-      if (sentMessages[text] < Date.now()) {
-        delete sentMessages[text];
+    for (const shortPermalink in sentMessages) {
+      if (sentMessages[shortPermalink] < Date.now()) {
+        delete sentMessages[shortPermalink];
       }
     }
 
-    const result = await promisify(searchClient.search.all, searchClient.search)('has:reaction', {count: 30});
+    const result = await promisify(searchClient.search.messages, searchClient.search)('has:reaction', {count: 30});
     if (!result.ok) {
       return;
     }
@@ -28,9 +28,13 @@ const run = async (isDry) => {
       }
 
       const shortPermalink = message.permalink.replace(/^.+\/([^/]+\/[^/]+)$/, '$1');
-      const text = `<${message.permalink}|${shortPermalink}> が reaction されたよ`;
 
-      if (!sentMessages[text] && !isDry) {
+      if (!sentMessages[shortPermalink] && !isDry) {
+        const reactions = await promisify(postClient.reactions.get, postClient.reactions)({
+          channel  : message.channel.id,
+          timestamp: message.ts
+        });
+        const text = `誰かが <${message.permalink}|${shortPermalink}> を` + reactions.message.reactions.map(r => `:${r.name}:`).join(' ');
         await promisify(postClient.chat.postMessage, postClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
           as_user     : false,
           icon_emoji  : ':star:',
@@ -38,7 +42,7 @@ const run = async (isDry) => {
           username    : 'starbot2'
         });
       }
-      sentMessages[text] = Date.now() + EXPIRE_MSEC;
+      sentMessages[shortPermalink] = Date.now() + EXPIRE_MSEC;
     }
 
     console.log(`There are ${Object.keys(sentMessages).length} message caches.`);
