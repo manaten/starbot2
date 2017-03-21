@@ -35,7 +35,9 @@ const processMessage = async message => {
       return;
     }
     const userName = (await getUserName(reaction.users[0])) || '誰か';
-    const shortPermalink = message.permalink.replace(/^.+\/([^/]+\/[^/]+)$/, '$1');
+    const shortPermalink = message.permalink
+      .replace(/^.+\/([^/]+\/[^/]+)$/, '$1')
+      .replace(message.channel.id, message.channel.name);
 
     const text = `:${userName}: が <${message.permalink}|${shortPermalink}> を :${reaction.name}:`;
     await promisify(postClient.chat.postMessage, postClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
@@ -52,7 +54,7 @@ const processMessage = async message => {
 
 const EXPIRE_MSEC = 60 * 60 * 1000;
 const sentMessages = {};
-const run = async (isDry) => {
+const run = async isDry => {
   try {
     // sentMessages からexpiredを取り除く
     for (const permalink in sentMessages) {
