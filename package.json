@@ -6,10 +6,10 @@
   "author": "manaten <manaten@manaten.net> (http://manaten.net)",
   "license": "MIT",
   "dependencies": {
-    "@slack/client": "^3.8.1",
-    "cron": "^1.2.1",
-    "es6-promisify": "^5.0.0",
-    "forever": "^0.15.3"
+    "@slack/client": "^4.8.0",
+    "cron": "^1.4.1",
+    "forever": "^0.15.3",
+    "lodash": "^4.17.11"
   },
   "engines": {
     "node": "7.6.0"

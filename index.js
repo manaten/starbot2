@@ -1,6 +1,6 @@
-const {WebClient} = require('@slack/client');
-const {CronJob} = require('cron');
-const promisify = require('es6-promisify');
+const { WebClient } = require('@slack/client');
+const { CronJob } = require('cron');
+const { uniqWith } = require('lodash');
 
 const searchClient = new WebClient(process.env.SLACK_TOKEN || '');
 const postClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN || '');
@@ -9,7 +9,7 @@ const getUserName = async userId => {
   if (!userId) {
     return null;
   }
-  const result = await promisify(postClient.users.info, postClient.users)(userId);
+  const result = await postClient.users.info({ user: userId });
   if  (!result.ok) {
     return null;
   }
@@ -17,7 +17,7 @@ const getUserName = async userId => {
 };
 
 const getReaction = async (channel, timestamp) => {
-  const result = await promisify(postClient.reactions.get, postClient.reactions)({channel, timestamp});
+  const result = await postClient.reactions.get({ channel, timestamp });
   if (!result.ok || !result.message.reactions[0]) {
     return null;
   }
@@ -40,7 +40,9 @@ const processMessage = async message => {
       .replace(message.channel.id, message.channel.name);
 
     const text = `:${userName}: が <${message.permalink}|${shortPermalink}> を :${reaction.name}:`;
-    await promisify(postClient.chat.postMessage, postClient.chat)(process.env.SLACK_CHANNEL_ID, text, {
+    await postClient.chat.postMessage({
+      channel: process.env.SLACK_CHANNEL_ID,
+      text,
       as_user     : false,
       icon_emoji  : ':star:',
       unfurl_links: true,
@@ -62,11 +64,16 @@ const run = async isDry => {
         delete sentMessages[permalink];
       }
     }
-    const result = await promisify(searchClient.search.messages, searchClient.search)('has:reaction', {count: 30});
+    const result = await searchClient.search.messages({ query: 'has:reaction', count: 30 });
     if (!result.ok) {
       return;
     }
-    for (const message of result.messages.matches) {
+
+    const messages = uniqWith(result.messages.matches, m => m.permalink);
+
+    console.log(`Got ${result.messages.matches.length} messages and ${messages.length} unique messages.`)
+
+    for (const message of messages) {
       if (!sentMessages[message.permalink] && !isDry) {
         await processMessage(message);
       }
