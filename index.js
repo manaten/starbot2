@@ -1,6 +1,6 @@
 const { WebClient } = require('@slack/client');
 const { CronJob } = require('cron');
-const { uniqWith } = require('lodash');
+const { uniqBy } = require('lodash');
 
 const searchClient = new WebClient(process.env.SLACK_TOKEN || '');
 const postClient = new WebClient(process.env.SLACK_BOT_TOKEN || process.env.SLACK_TOKEN || '');
@@ -65,21 +65,30 @@ const run = async isDry => {
       }
     }
     const result = await searchClient.search.messages({ query: 'has:reaction', count: 30 });
+
     if (!result.ok) {
       return;
     }
 
-    const messages = uniqWith(result.messages.matches, m => m.permalink);
-
-    console.log(`Got ${result.messages.matches.length} messages and ${messages.length} unique messages.`)
+    const messages =
+      uniqBy(result.messages.matches, m => m.permalink)
+      .filter(m => !sentMessages[m.permalink]);
+    console.log(
+      `Got ${result.messages.matches.length} messages and ${messages.length} valid messages.` +
+      (messages.length > 0 ? ` first message is ${messages[0].permalink})` : '')
+    );
 
     for (const message of messages) {
-      if (!sentMessages[message.permalink] && !isDry) {
-        await processMessage(message);
-      }
       sentMessages[message.permalink] = Date.now() + EXPIRE_MSEC;
     }
     console.log(`There are ${Object.keys(sentMessages).length} message caches.`);
+
+    if (!isDry) {
+      for (const message of messages) {
+        await processMessage(message);
+      }
+    }
+    console.log('done.');
   } catch (e) {
     console.error(e);
   }
